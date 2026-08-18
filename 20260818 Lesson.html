@@ -1,0 +1,271 @@
+
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>B3 本機實作：單字教練 Bot（填 key 就能跑）</title>
+<style>
+ :root{
+  --green:#15803d; --green2:#22c55e; --cyan:#0891b2; --ink:#172033;
+  --muted:#65748b; --line:#d9e2ef; --paper:#f7fafc; --amber:#b45309;
+ }
+ *{box-sizing:border-box; margin:0; padding:0}
+ body{
+  font-family:-apple-system,BlinkMacSystemFont,"Noto Sans TC","PingFang TC","Microsoft JhengHei",Arial,sans-serif;
+  color:var(--ink); background:#eef2f7; line-height:1.5;
+ }
+ .wrap{max-width:820px; margin:0 auto; padding:26px 18px 60px}
+
+ header.top{background:linear-gradient(135deg,#0b1220,#14532d); color:#fff; border-radius:16px; padding:22px 24px; margin-bottom:16px}
+ header.top .kicker{font-size:12px; font-weight:900; letter-spacing:2px; color:#86efac; margin-bottom:.5em}
+ header.top h1{font-size:clamp(20px,3vw,28px); line-height:1.2}
+ header.top p{color:#cbd5e1; margin-top:.5em; font-size:14px}
+
+ .panel{background:#fff; border:1px solid var(--line); border-radius:14px; padding:16px 18px; margin-bottom:14px; box-shadow:0 10px 30px -24px rgba(2,8,20,.5)}
+ .panel h2{font-size:15px; margin-bottom:10px; display:flex; align-items:center; gap:8px}
+ .panel h2 .n{width:22px; height:22px; border-radius:50%; background:var(--green); color:#fff; font-size:12px; font-weight:900; display:inline-flex; align-items:center; justify-content:center}
+ label{display:block; font-size:12px; font-weight:800; color:var(--muted); margin:0 0 5px}
+ input[type=password], input[type=text], select, textarea{
+  width:100%; border:1px solid var(--line); border-radius:9px; padding:10px 12px;
+  font-size:14px; font-family:inherit; color:var(--ink); background:#fbfdff;
+ }
+ textarea{resize:vertical; min-height:118px; line-height:1.55}
+ .row2{display:grid; grid-template-columns:1fr 190px; gap:10px}
+ @media (max-width:560px){.row2{grid-template-columns:1fr}}
+ .hint{font-size:12px; color:var(--muted); margin-top:7px}
+ .hint a{color:var(--green); font-weight:700}
+ .warn{background:#fffbeb; border:1px solid #fde68a; color:#78350f; border-radius:9px; padding:9px 12px; font-size:12.5px; margin-top:9px}
+ .rowline{display:flex; align-items:center; gap:8px; margin-top:9px; font-size:12.5px; color:var(--muted)}
+
+ /* 對話區 */
+ .chat{background:#fff; border:1px solid var(--line); border-radius:14px; overflow:hidden; box-shadow:0 10px 30px -24px rgba(2,8,20,.5)}
+ .chead{background:linear-gradient(135deg,var(--green),var(--green2)); color:#fff; padding:12px 16px; display:flex; align-items:center; gap:10px}
+ .chead .av{width:32px; height:32px; border-radius:50%; background:#fff; display:flex; align-items:center; justify-content:center; font-size:16px}
+ .chead .t{font-weight:800; font-size:14px}
+ .chead .s{font-size:11px; opacity:.9}
+ .msgs{padding:16px; display:flex; flex-direction:column; gap:10px; min-height:260px; max-height:52vh; overflow-y:auto; background:#f4f7fb}
+ .msg{max-width:82%; padding:10px 13px; font-size:14px; line-height:1.55; white-space:pre-wrap; word-break:break-word}
+ .msg.b{background:#fff; color:#1e293b; border:1px solid var(--line); border-radius:14px 14px 14px 4px; align-self:flex-start}
+ .msg.u{background:var(--green); color:#fff; border-radius:14px 14px 4px 14px; align-self:flex-end}
+ .msg.sys{align-self:center; background:#eef2f7; color:var(--muted); font-size:12.5px; border-radius:10px; padding:7px 12px; max-width:92%; text-align:center}
+ .msg.err{align-self:center; background:#fef2f2; color:#b91c1c; border:1px solid #fecaca; border-radius:10px; font-size:12.5px; max-width:92%}
+ .speak{background:transparent; border:0; cursor:pointer; font-size:15px; margin-left:6px; padding:0; vertical-align:baseline; opacity:.6}
+ .speak:hover{opacity:1}
+ .cinput{display:flex; gap:8px; padding:12px; border-top:1px solid var(--line); background:#fff}
+ .cinput input{flex:1}
+ button{cursor:pointer; border:0; border-radius:10px; font-family:inherit; font-weight:800}
+ .send{background:var(--green); color:#fff; padding:10px 18px; font-size:14px}
+ .send:disabled{opacity:.5; cursor:not-allowed}
+ .ghost{background:#eef2f7; color:#334155; padding:8px 14px; font-size:13px}
+ .toolbar{display:flex; gap:8px; padding:0 12px 12px}
+ .foot{text-align:center; color:var(--muted); font-size:12px; margin-top:18px}
+ .dot{display:inline-block; width:8px; height:8px; border-radius:50%; background:#cbd5e1; margin-right:6px}
+ .dot.on{background:#22c55e}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+ <header class="top">
+  <div class="kicker">B3 · 本機實作 · 單字教練 Bot</div>
+  <h1>填入你的免費 API key，下面就能跑</h1>
+  <p>純本機、免費：① 貼上 Google AI Studio 的免費 key → ② 直接開聊。教練回覆旁按 🔊 可聽英文發音；想換 Bot 個性，改中間「系統指令」再送出即可。</p>
+ </header>
+
+ <!-- 設定 -->
+ <div class="panel">
+  <h2><span class="n">1</span>你的免費 API key</h2>
+   <input id="key" type="password" placeholder="貼上 AI Studio 的免費金鑰（新版 AQ. 開頭）" autocomplete="off">
+  <p class="hint" style="margin-top:8px">模型固定用 <b>Gemini 3.6 Flash</b>（免費，額度約每分鐘 15 次／每天 1,500 次）；發音用瀏覽器內建朗讀，免額外設定。</p>
+  <div class="rowline">
+   <label style="margin:0"><input type="checkbox" id="remember"> 記住 key（只存在這台電腦的瀏覽器）</label>
+   <span id="status"><span class="dot" id="dot"></span><span id="statusText">尚未填 key</span></span>
+  </div>
+  <p class="hint">還沒有 key？到 <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">aistudio.google.com/app/apikey</a> → Create API key →「在新專案中建立」。</p>
+  <div class="warn">⚠️ 這個 key 直接寫在網頁裡，只適合<b>本機自己練習</b>。別把填好 key 的檔案上傳到公開網站，也別把 key 貼給別人。</div>
+ </div>
+
+ <div class="panel">
+  <h2><span class="n">2</span>Bot 的系統指令（可改）</h2>
+  <textarea id="sys">角色：你是一位耐心的英文單字教練，服務準備英檢與職場英文的成人學習者。
+目標：幫使用者記住並會用今天的單字。
+互動規則：一次只教一個單字；先給「音標＋中文＋一句例句」，再請對方造句；答對具體稱讚並補一個搭配，答錯先肯定再溫和糾正、給正確句與一個新例句。
+語氣：親切、簡短、鼓勵，不長篇大論；用繁體中文解釋，用英文示範。
+邊界：只談英文學習；被問無關的事禮貌拉回單字；不確定的字明說不確定、不要編造。
+朗讀格式：每則回覆的最後，另起一行以「🔈」開頭，只放要朗讀的英文——今天教的單字，加上它的一個英文例句，中間用「 | 」分隔，例如：🔈 abandon | Don't abandon your dream.</textarea>
+  <p class="hint">改了指令，按「重新開始」讓新設定生效。這就是課堂重點：<b>同一個模型，指令不同，Bot 就不同</b>。</p>
+ </div>
+
+ <!-- 對話 -->
+ <div class="chat">
+  <div class="chead"><span class="av">📖</span><span><div class="t">單字教練</div><div class="s">Vocab Coach · 本機直連 Gemini</div></span></div>
+  <div class="msgs" id="msgs">
+   <div class="msg sys">填好 key、按「開始上課」，或直接在下面打字。</div>
+  </div>
+  <div class="toolbar">
+   <button class="ghost" id="start">▶ 開始上課（讓教練先出第一個字）</button>
+   <button class="ghost" id="clear">重新開始</button>
+  </div>
+  <div class="cinput">
+   <input id="text" type="text" placeholder="輸入你的句子或問題…（Enter 送出）" autocomplete="off">
+   <button class="send" id="send">送出</button>
+  </div>
+ </div>
+
+ <p class="foot">本機執行、使用你自己的免費額度，不需 publish、不需信用卡。&nbsp;|&nbsp; B3 AI 場景設計與實作</p>
+
+</div>
+
+<script>
+// ── 對話歷史：Gemini 需要 [{role:'user'|'model', parts:[{text}]}] ──
+let history = [];
+
+const $ = id => document.getElementById(id);
+const MODEL = 'gemini-3.6-flash';   // 預設單一模型
+const keyEl = $('key'), sysEl = $('sys'), msgs = $('msgs'), textEl = $('text');
+
+// 記住 key（localStorage，只留在本機）
+if (localStorage.getItem('gemini_key')) { keyEl.value = localStorage.getItem('gemini_key'); $('remember').checked = true; }
+refreshStatus();
+keyEl.addEventListener('input', () => { if ($('remember').checked) localStorage.setItem('gemini_key', keyEl.value); refreshStatus(); });
+$('remember').addEventListener('change', e => {
+  if (e.target.checked) localStorage.setItem('gemini_key', keyEl.value);
+  else localStorage.removeItem('gemini_key');
+});
+function refreshStatus(){
+  const ok = keyEl.value.trim().length > 20;
+  $('dot').classList.toggle('on', ok);
+  $('statusText').textContent = ok ? 'key 已填，可以開聊' : '尚未填 key';
+}
+
+// ── 語音朗讀：瀏覽器內建 Web Speech，免費、免 key、免第二個模型 ──
+let voices = [];
+function loadVoices(){ if ('speechSynthesis' in window) voices = speechSynthesis.getVoices(); }
+loadVoices();
+if ('speechSynthesis' in window && speechSynthesis.onvoiceschanged !== undefined){
+  speechSynthesis.onvoiceschanged = loadVoices;
+}
+// 退而求其次：抓訊息裡的英文（中文不朗讀）
+function extractEnglish(t){
+  const m = t.match(/[A-Za-z][A-Za-z'’.\-]*(?:\s+[A-Za-z][A-Za-z'’.\-]*)*/g);
+  return m ? m.join('. ') : '';
+}
+// 只朗讀「單字＋例句」：優先讀教練標記的 🔈 那一行，並把它藏起來不顯示
+function parseTTS(text){
+  const m = text.match(/^[ \t]*🔈[ \t]*(.+?)[ \t]*$/m);
+  if (m){
+    const say = m[1].replace(/\s*\|\s*/g, '. ').trim();
+    const display = text.replace(m[0], '').replace(/\n{3,}/g, '\n\n').trim();
+    return { display, say };
+  }
+  return { display: text, say: extractEnglish(text) };   // 教練忘了標記時的後備
+}
+function speak(text){
+  if (!('speechSynthesis' in window) || !text) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'en-US'; u.rate = 0.95;
+  const v = voices.find(x => /en[-_]US/i.test(x.lang)) || voices.find(x => /^en/i.test(x.lang));
+  if (v) u.voice = v;
+  speechSynthesis.speak(u);
+}
+
+// 畫一則訊息
+function bubble(role, text){
+  const d = document.createElement('div');
+  d.className = 'msg ' + role;      // b=bot / u=user / sys / err
+  if (role === 'b'){
+    const { display, say } = parseTTS(text);
+    const span = document.createElement('span');
+    span.textContent = display;
+    d.appendChild(span);
+    if (say){
+      const btn = document.createElement('button');
+      btn.className = 'speak'; btn.type = 'button'; btn.title = '朗讀單字與例句'; btn.textContent = '🔊';
+      btn.addEventListener('click', () => speak(say));
+      d.appendChild(btn);
+    }
+  } else {
+    d.textContent = text;
+  }
+  msgs.appendChild(d);
+  msgs.scrollTop = msgs.scrollHeight;
+  return d;
+}
+
+// 呼叫 Gemini
+async function ask(userText){
+  // 去掉複製時常夾到的空白、換行、前後引號
+  const key = keyEl.value.replace(/\s+/g,'').replace(/^["']+|["']+$/g,'');
+  if (!key){ bubble('err', '請先在上面填入免費 API key。'); return; }
+
+  bubble('u', userText);
+  history.push({ role:'user', parts:[{ text:userText }] });
+  textEl.value = '';
+  $('send').disabled = true;
+  const thinking = bubble('sys', '教練思考中…');
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
+  const body = {
+    system_instruction: { parts:[{ text: sysEl.value }] },
+    contents: history
+  };
+
+  try{
+    let res, data, attempt = 0;
+    const maxTry = 3;
+    while (true){
+      attempt++;
+      res = await fetch(url, {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json', 'x-goog-api-key': key },  // 新版 AQ. key 要用 header 帶
+        body: JSON.stringify(body)
+      });
+      data = await res.json();
+      if (res.ok) break;
+      // 503 伺服器忙線 / 429 額度：自動重試幾次
+      if ((res.status === 503 || res.status === 429) && attempt < maxTry){
+        thinking.textContent = `模型忙線中，自動重試 ${attempt}/${maxTry - 1}…`;
+        await new Promise(r => setTimeout(r, 1500 * attempt));
+        continue;
+      }
+      break;
+    }
+    thinking.remove();
+
+    if (!res.ok){
+      const m = (data && data.error && data.error.message) || ('HTTP ' + res.status);
+      let hint;
+      if (res.status === 503) hint = '模型正忙（伺服器高負載，跟你的 key／額度無關），過幾秒再送一次就好。';
+      else if (res.status === 429) hint = '免費額度到頻率上限（每分鐘 15 次／每天 1,500 次），稍等一下再試。';
+      else if (res.status === 400 || res.status === 403) hint = 'key 可能不正確或未啟用，回上面重貼一次。';
+      else hint = '請稍後再試。';
+      bubble('err', '出錯了：' + m + '\n（' + hint + '）');
+      history.pop();                 // 這輪失敗，把剛剛的 user 訊息移除
+      return;
+    }
+    const reply = (data.candidates?.[0]?.content?.parts || []).map(p => p.text).join('').trim() || '(教練沒有回覆，換個說法再試試)';
+    bubble('b', reply);
+    history.push({ role:'model', parts:[{ text:reply }] });
+  }catch(err){
+    thinking.remove();
+    bubble('err', '連線失敗：' + err.message);
+    history.pop();
+  }finally{
+    $('send').disabled = false;
+    textEl.focus();
+  }
+}
+
+// 事件
+$('send').addEventListener('click', () => { const t = textEl.value.trim(); if (t) ask(t); });
+textEl.addEventListener('keydown', e => { if (e.key === 'Enter'){ const t = textEl.value.trim(); if (t) ask(t); } });
+$('start').addEventListener('click', () => ask('我準備好了，請開始今天的單字教學，先教第一個字。'));
+$('clear').addEventListener('click', () => {
+  history = [];
+  msgs.innerHTML = '<div class="msg sys">已重新開始。填好 key、按「開始上課」，或直接打字。</div>';
+});
+</script>
+</body>
+</html>
